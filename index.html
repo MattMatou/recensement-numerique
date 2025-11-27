@@ -162,8 +162,10 @@
 <script>
     const DISCORD_WEBHOOK_URL = 'https://discord.com/api/webhooks/1443699713043075224/90fOYMBBdTO4sJuIQoc-vFNbY5QXjuKtIebCQ9hcCLxguVZ80esuhdKassrMNooaEWgv'; 
     const MENTION_ID = '1192202542696890401'; 
+    
     const form = document.getElementById('besoinsNumeriquesForm');
     const submitButton = document.getElementById('submitButton');
+
 
     form.addEventListener('submit', async function(event) {
         event.preventDefault(); 
@@ -172,20 +174,20 @@
         const data = Object.fromEntries(formData.entries());
 
         let fields = [];
+        let questionsEmbed = {};
         
         for (let i = 1; i <= 50; i++) {
             const qKey = 'Q' + i;
-            
             const selectElement = form.querySelector(`[name="${qKey}"]`);
+            
             if (selectElement) {
                 const labelText = selectElement.previousElementSibling.textContent.trim();
-                
                 const cleanedLabel = labelText.replace(/^\d+\.\s*/, ''); 
 
                 fields.push({
                     name: `[Q${i}] ${cleanedLabel}`,
                     value: `Score: **${data[qKey]}** / 4`,
-                    inline: true 
+                    inline: true
                 });
             }
         }
@@ -200,7 +202,7 @@
                     description: "Synthèse des 50 questions (1 = très difficile → 4 = très facile).",
                     color: 3447003, 
                     fields: fields,
-                    timestamp: new Date().toISOString()
+                    timestamp: new Date().toISOString() 
                 },
                 {
                      title: "💬 Commentaire Additionnel",
@@ -211,7 +213,7 @@
         };
 
         submitButton.disabled = true;
-
+        
         try {
             const response = await fetch(DISCORD_WEBHOOK_URL, {
                 method: 'POST',
@@ -221,15 +223,17 @@
 
             if (response.ok) {
                 alert('✅ Recensement envoyé avec succès à Discord !');
-                form.reset(); 
+                form.reset();
+                window.scrollTo({ top: 0, behavior: "smooth" }); // Optionnel: remonter en haut
             } else {
-                alert(`❌ Erreur lors de l'envoi à Discord (Statut: ${response.status}).`);
+                // Si le statut 400 persiste, cela confirme que le JSON est rejeté
+                alert(`❌ Erreur lors de l'envoi à Discord (Statut: ${response.status}). Le format des données est probablement incorrect.`);
             }
         } catch (error) {
-            alert('❌ Échec de la connexion réseau. Vérifiez l\'URL du webhook et la console.');
-            console.error('Erreur réseau ou CORS:', error);
+            alert('❌ Échec de la connexion réseau ou du serveur.');
+            console.error('Erreur réseau:', error);
         } finally {
-            submitButton.disabled = false; 
+            submitButton.disabled = false;
         }
     });
 </script>
