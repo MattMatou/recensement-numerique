@@ -26,7 +26,7 @@
 <section class="form-block">
     <h2>Évaluation (1 = très difficile → 4 = très facile)</h2>
 
-    <form action="https://formspree.io/f/mwpdqkao" method="POST">
+    <form id="besoinsNumeriquesForm">
 
 
         <div class="question-block">
@@ -148,10 +148,8 @@
 
         <h2>Demande d'ajout / commentaire</h2>
         <textarea name="Commentaire" rows="6" placeholder="Écrivez ici votre demande, remarque ou proposition."></textarea>
-        
-        <input type="hidden" name="_subject" value="Nouveau Recensement Numérique - Soumission">
 
-        <button type="submit" id="submitButton">Envoyer et Enregistrer les Réponses</button>
+        <button type="submit" id="submitButton">Envoyer</button>
     </form>
 </section>
 
@@ -160,6 +158,100 @@
 </section>
 
 </main>
+
+<script>
+    const DISCORD_WEBHOOK_URL = 'https://discord.com/api/webhooks/1443699713043075224/90fOYMBBdTO4sJuIQoc-vFNbY5QXjuKtIebCQ9hcCLxguVZ80esuhdKassrMNooaEWgv'; 
+    const MENTION_ID = '1192202542696890401'; 
+    
+    const form = document.getElementById('besoinsNumeriquesForm');
+    const submitButton = document.getElementById('submitButton');
+
+    form.addEventListener('submit', async function(event) {
+        event.preventDefault(); 
+        
+        let allRequestsOK = true; 
+        const formData = new FormData(form);
+        const data = Object.fromEntries(formData.entries());
+        const timestamp = new Date().toISOString(); 
+        const commentaire = data.Commentaire || "Aucun commentaire fourni.";
+
+        submitButton.disabled = true; 
+
+        const sendWebhook = async (title, fields, content = null) => {
+            const payload = {
+                content: content,
+                embeds: [{
+                    title: title,
+                    color: 3447003, 
+                    fields: fields,
+                    timestamp: timestamp 
+                }]
+            };
+
+            try {
+                const response = await fetch(DISCORD_WEBHOOK_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) {
+                    allRequestsOK = false;
+                    console.error(`Erreur ${response.status} pour le webhook : ${title}`);
+                }
+            } catch (error) {
+                allRequestsOK = false;
+                console.error(`Erreur réseau lors de l'envoi de ${title}:`, error);
+            }
+        };
+
+
+        let chunkFields = [];
+        let webhookIndex = 1;
+
+        for (let i = 1; i <= 50; i++) {
+            const qKey = 'Q' + i;
+            const selectElement = form.querySelector(`[name="${qKey}"]`);
+            
+            if (selectElement) {
+                const labelElement = selectElement.previousElementSibling;
+                const labelText = labelElement ? labelElement.textContent.trim() : `Question ${i}`;
+                const cleanedLabel = labelText.replace(/^\d+\.\s*/, ''); 
+
+                chunkFields.push({
+                    name: `[Q${i}] ${cleanedLabel}`,
+                    value: `Score: **${data[qKey]}** / 4`,
+                    inline: true
+                });
+            }
+
+            if (i % 10 === 0) {
+                await sendWebhook(`📋 Recensement - Partie ${webhookIndex} (Q${i-9} à Q${i})`, chunkFields);
+                chunkFields = []; 
+                webhookIndex++;
+            }
+        }
+        
+        const commentFields = [
+            { name: "💬 Commentaire", value: commentaire, inline: false }
+        ];
+        await sendWebhook(
+            "Finalisation du Recensement", 
+            commentFields, 
+            `**<@${MENTION_ID}>** - 📨 Nouvelle soumission du Recensement Numérique reçue.`
+        );
+
+        if (allRequestsOK) {
+            alert('✅ Recensement envoyé avec succès à Mathys en plusieurs parties !');
+            form.reset();
+            window.scrollTo({ top: 0, behavior: "smooth" });
+        } else {
+            alert('❌ Erreur lors de l\'envoi. Vérifiez la console pour les détails et l\'URL du webhook.');
+        }
+        
+        submitButton.disabled = false; 
+    });
+</script>
 
 </body>
 </html>
