@@ -166,75 +166,90 @@
     const form = document.getElementById('besoinsNumeriquesForm');
     const submitButton = document.getElementById('submitButton');
 
-
     form.addEventListener('submit', async function(event) {
         event.preventDefault(); 
         
+        let allRequestsOK = true; 
         const formData = new FormData(form);
         const data = Object.fromEntries(formData.entries());
+        const timestamp = new Date().toISOString(); 
+        const commentaire = data.Commentaire || "Aucun commentaire fourni.";
 
-        let fields = [];
-        let questionsEmbed = {};
-        
+        submitButton.disabled = true; 
+
+        const sendWebhook = async (title, fields, content = null) => {
+            const payload = {
+                content: content,
+                embeds: [{
+                    title: title,
+                    color: 3447003, 
+                    fields: fields,
+                    timestamp: timestamp 
+                }]
+            };
+
+            try {
+                const response = await fetch(DISCORD_WEBHOOK_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) {
+                    allRequestsOK = false;
+                    console.error(`Erreur ${response.status} pour le webhook : ${title}`);
+                }
+            } catch (error) {
+                allRequestsOK = false;
+                console.error(`Erreur réseau lors de l'envoi de ${title}:`, error);
+            }
+        };
+
+
+        let chunkFields = [];
+        let webhookIndex = 1;
+
         for (let i = 1; i <= 50; i++) {
             const qKey = 'Q' + i;
             const selectElement = form.querySelector(`[name="${qKey}"]`);
             
             if (selectElement) {
-                const labelText = selectElement.previousElementSibling.textContent.trim();
+                const labelElement = selectElement.previousElementSibling;
+                const labelText = labelElement ? labelElement.textContent.trim() : `Question ${i}`;
                 const cleanedLabel = labelText.replace(/^\d+\.\s*/, ''); 
 
-                fields.push({
+                chunkFields.push({
                     name: `[Q${i}] ${cleanedLabel}`,
                     value: `Score: **${data[qKey]}** / 4`,
                     inline: true
                 });
             }
-        }
-        
-        const commentaire = data.Commentaire || "Aucun commentaire fourni.";
 
-        const payload = {
-            content: `**<@${MENTION_ID}>** - 📨 Nouvelle soumission du Recensement Numérique !`,
-            embeds: [
-                {
-                    title: "📋 Résultats de l'Évaluation Numérique",
-                    description: "Synthèse des 50 questions (1 = très difficile → 4 = très facile).",
-                    color: 3447003, 
-                    fields: fields,
-                    timestamp: new Date().toISOString() 
-                },
-                {
-                     title: "💬 Commentaire Additionnel",
-                     description: commentaire,
-                     color: 16753920 
-                }
-            ]
-        };
-
-        submitButton.disabled = true;
-        
-        try {
-            const response = await fetch(DISCORD_WEBHOOK_URL, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            });
-
-            if (response.ok) {
-                alert('✅ Recensement envoyé avec succès à Discord !');
-                form.reset();
-                window.scrollTo({ top: 0, behavior: "smooth" }); // Optionnel: remonter en haut
-            } else {
-                // Si le statut 400 persiste, cela confirme que le JSON est rejeté
-                alert(`❌ Erreur lors de l'envoi à Discord (Statut: ${response.status}). Le format des données est probablement incorrect.`);
+            if (i % 10 === 0) {
+                await sendWebhook(`📋 Recensement - Partie ${webhookIndex} (Q${i-9} à Q${i})`, chunkFields);
+                chunkFields = []; 
+                webhookIndex++;
             }
-        } catch (error) {
-            alert('❌ Échec de la connexion réseau ou du serveur.');
-            console.error('Erreur réseau:', error);
-        } finally {
-            submitButton.disabled = false;
         }
+        
+        const commentFields = [
+            { name: "💬 Commentaire", value: commentaire, inline: false }
+        ];
+        await sendWebhook(
+            "Finalisation du Recensement", 
+            commentFields, 
+            `**<@${MENTION_ID}>** - 📨 Nouvelle soumission du Recensement Numérique reçue.`
+        );
+
+        if (allRequestsOK) {
+            alert('✅ Recensement envoyé avec succès à Discord en plusieurs parties !');
+            form.reset();
+            window.scrollTo({ top: 0, behavior: "smooth" });
+        } else {
+            alert('❌ Erreur lors de l\'envoi. Vérifiez la console pour les détails et l\'URL du webhook.');
+        }
+        
+        submitButton.disabled = false; 
     });
 </script>
 
